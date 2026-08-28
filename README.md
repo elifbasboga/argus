@@ -27,24 +27,24 @@ bilgisi vb.) raporlar; sunucu bu verileri saklar ve canlı bir web dashboard
   kalıcı olarak çalışacak şekilde (`launchd`) yapılandırılabilir.
 
 ## Klasör yapısı
-argus/
-├── agent/ # İzlenen cihazlarda çalışan istemci
-│ ├── agent.py # Ana çalışma döngüsü (config + heartbeat)
-│ ├── agent_config.py # Config yükleme mantığı
-│ ├── collectors.py # Sistem bilgisi toplama (CPU, RAM, IP vb.)
-│ ├── dispatcher.py # Komut çalıştırma ve allowlist kontrolü
-│ ├── logger.py # RFC5424 loglama
-│ ├── process_classifier.py # Süreç sınıflandırma
-│ ├── user_classifier.py # Kullanıcı sınıflandırma
-│ └── agent_config.example.json
-├── server/ # Merkezi sunucu
-│ ├── server.py # FastAPI uygulaması, API endpoint'leri
-│ ├── db.py # SQLite veritabanı katmanı
-│ ├── logger.py # RFC5424 loglama
-│ └── server_config.example.json
-├── dashboard/ # Statik web dashboard
-│ └── dashboard.html
-└── venv/ # (git'e dahil değil) Python sanal ortamı
+
+- `agent/` — İzlenen cihazlarda çalışan istemci
+  - `agent.py` — Ana çalışma döngüsü (config + heartbeat)
+  - `agent_config.py` — Config yükleme mantığı
+  - `collectors.py` — Sistem bilgisi toplama (CPU, RAM, IP vb.)
+  - `dispatcher.py` — Komut çalıştırma ve allowlist kontrolü
+  - `logger.py` — RFC5424 loglama
+  - `process_classifier.py` — Süreç sınıflandırma
+  - `user_classifier.py` — Kullanıcı sınıflandırma
+  - `agent_config.example.json`
+- `server/` — Merkezi sunucu
+  - `server.py` — FastAPI uygulaması, API endpoint'leri
+  - `db.py` — SQLite veritabanı katmanı
+  - `logger.py` — RFC5424 loglama
+  - `server_config.example.json`
+- `dashboard/` — Statik web dashboard
+  - `dashboard.html`
+- `venv/` — (git'e dahil değil) Python sanal ortamı
 
 
 ## Kurulum
