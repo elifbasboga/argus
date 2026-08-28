@@ -1,0 +1,9 @@
+{
+  "host": "0.0.0.0",
+  "port": 8000,
+  "db_path": "argus_server.db",
+  "heartbeat_retention_days": 7,
+  "command_result_retention_days": 7,
+  "cleanup_interval_hours": 1,
+  "admin_passcode": "REPLACE_ME_WITH_YOUR_OWN_PASSCODE"
+}

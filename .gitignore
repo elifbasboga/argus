@@ -1,0 +1,33 @@
+# Gerçek config dosyaları (passcode, server_url, endpoint_id içeriyor)
+
+server/server_config.json
+
+agent/agent_config.json
+
+# Veritabanı ve yedekleri
+
+server/argus_server.db
+
+server/argus_server.db.bak
+
+# Log dosyaları
+
+server/logs/
+
+agent/logs/
+
+# Python ortamı ve önbellek
+
+venv/
+
+__pycache__/
+
+*.pyc
+
+.pytest_cache/
+
+# macOS
+
+.DS_Store
+
+

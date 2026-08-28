@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html class="dark" lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Argus — Vigilance System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+
+<script>
+  // ------------------------------------------------------------------
+  // Renk sistemi: koyu lacivert zemin + altın/amber ana renk.
+  // (Senin mockup'larındaki mor palete geri dönüldü — bu renk değişikliği
+  // istenmemişti, önceki mesajda yanlış anlamıştım. Logo, bu mor temaya
+  // uyacak şekilde ayrıca yeniden renklendirildi: logo.png/recolor.)
+  // ------------------------------------------------------------------
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          background: "#0b0e14",
+          "surface-dim": "#0b0e14",
+          "surface-container-lowest": "#0b0e14",
+          "surface-container-low": "#161b22",
+          "surface-container": "#161b22",
+          "surface-container-high": "#2d3a4a",
+          "surface-container-highest": "#283646",
+          "surface-variant": "#2d3a4a",
+          outline: "#2d3a4a",
+          "outline-variant": "#2d3a4a",
+          "on-surface": "#d6e4f9",
+          "on-surface-variant": "#bcc9c6",
+          primary: "#a855f7",
+          "on-primary": "#ffffff",
+          "primary-container": "#6b21a8",
+          "on-primary-container": "#e9d5ff",
+          success: "#34d399",
+          "success-container": "#0d2b22",
+          warning: "#fbbf24",
+          "warning-container": "#3a2e0a",
+          danger: "#ffb4ab",
+          "danger-container": "#93000a",
+        },
+        borderRadius: { DEFAULT: "0.375rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+        spacing: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px", gutter: "16px" },
+        fontFamily: {
+          "body-md": ["Inter"], "body-lg": ["Inter"], "headline-md": ["Inter"], "headline-lg": ["Inter"],
+          display: ["Inter"], "label-caps": ["Inter"], "data-mono": ["JetBrains Mono"],
+        },
+        fontSize: {
+          "label-caps": ["11px", { lineHeight: "1", letterSpacing: "0.06em", fontWeight: "700" }],
+          "data-mono": ["13px", { lineHeight: "1.5", fontWeight: "500" }],
+          "headline-md": ["18px", { lineHeight: "1.4", fontWeight: "600" }],
+          "headline-lg": ["22px", { lineHeight: "1.3", fontWeight: "700" }],
+          display: ["28px", { lineHeight: "1.2", fontWeight: "700", letterSpacing: "-0.01em" }],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  body { background-color: #0b0e14; color: #d6e4f9; }
+  .glass {
+    background: rgba(22, 27, 34, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid #2d3a4a;
+    /* Safari'de backdrop-filter içeren elementler, içeriği sık güncellenince
+       bazen eski pikselleri tam temizlemiyor (bilinen WebKit davranışı).
+       Kendi GPU katmanına zorlamak bu "hayalet metin" sorununu çözüyor. */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+  .terminal-bg { background-color: #000000; }
+  .zebra:nth-child(even) { background-color: rgba(255,255,255,0.02); }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2d3a4a; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a855f7; }
+
+  #sidebar { width: 248px; transition: width 0.18s ease; }
+  #sidebar.collapsed { width: 72px; }
+  #sidebar.collapsed .nav-label,
+  #sidebar.collapsed .brand-text { display: none; }
+  #main-area { margin-left: 248px; transition: margin-left 0.18s ease; }
+  #main-area.collapsed { margin-left: 72px; }
+
+  .nav-item.active { color: #a855f7; background: rgba(168,85,247,0.10); border-right: 2px solid #a855f7; }
+  .status-dot { position: relative; display: inline-flex; height: 8px; width: 8px; border-radius: 9999px; }
+  .status-dot.online { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,0.6); }
+  .status-dot.offline { background: #4b5563; }
+  .status-ping { position: absolute; inset: 0; border-radius: 9999px; opacity: 0.6; animation: ping 1.6s cubic-bezier(0,0,0.2,1) infinite; }
+  .status-ping.online { background: #34d399; }
+  @keyframes ping { 75%, 100% { transform: scale(2.2); opacity: 0; } }
+
+  .view { display: none; }
+  .view.active { display: flex; }
+</style>
+</head>
+
+<body class="font-body-md text-body-md antialiased flex h-screen overflow-hidden">
+
+<!-- ============================== SIDEBAR ============================== -->
+<nav id="sidebar" class="fixed left-0 top-0 h-full bg-surface-dim border-r border-outline-variant/60 flex flex-col py-lg px-md z-50 shrink-0">
+  <button id="sidebar-toggle" class="flex items-center gap-sm mb-xl px-xs group" title="Kenar çubuğunu daralt/genişlet">
+    <span class="material-symbols-outlined text-primary text-[30px] shrink-0">visibility</span>
+    <div class="brand-text text-left">
+      <div class="font-headline-md text-headline-md font-bold text-primary leading-none">Argus</div>
+      <div class="font-label-caps text-label-caps text-on-surface-variant mt-1">Vigilance System</div>
+    </div>
+  </button>
+
+  <div class="flex-1 flex flex-col gap-xs">
+    <a data-view="endpoints" class="nav-item active flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 transition-colors cursor-pointer">
+      <span class="material-symbols-outlined text-[20px] shrink-0">devices</span>
+      <span class="nav-label">Endpoints</span>
+    </a>
+    <a data-view="logs" class="nav-item flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 transition-colors cursor-pointer">
+      <span class="material-symbols-outlined text-[20px] shrink-0">terminal</span>
+      <span class="nav-label">Logs</span>
+    </a>
+    <a data-view="settings" class="nav-item flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/60 transition-colors cursor-pointer">
+      <span class="material-symbols-outlined text-[20px] shrink-0">settings</span>
+      <span class="nav-label">Settings</span>
+    </a>
+  </div>
+</nav>
+
+<!-- ============================== MAIN ============================== -->
+<div id="main-area" class="flex-1 flex flex-col h-full">
+  <header class="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/50 flex items-center justify-between px-lg h-16 shrink-0">
+    <div class="flex items-center gap-md">
+      <h1 id="page-title" lang="en" class="font-headline-lg text-headline-lg font-black text-primary uppercase tracking-tight">Endpoints</h1>
+    </div>
+    <div class="flex items-center gap-md">
+      <div id="global-status" class="flex items-center gap-sm px-sm py-1 rounded-full border border-outline-variant/60 bg-surface-container/60">
+        <span class="status-dot offline"><span class="status-ping"></span></span>
+        <span id="global-status-text" class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Bağlantı bekleniyor</span>
+        <span id="last-update" class="font-data-mono text-data-mono text-on-surface-variant/60 text-[11px] border-l border-outline-variant/50 pl-sm"></span>
+      </div>
+      <img alt="Argus logo" class="w-12 h-12 rounded-full border border-primary/30 object-cover bg-surface-container" src="logo.png"/>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-y-auto p-lg">
+    <div class="max-w-[1400px] mx-auto flex flex-col gap-lg">
+
+      <!-- ======================= VIEW: ENDPOINTS ======================= -->
+      <section id="view-endpoints" class="view active flex-col gap-lg">
+
+        <!-- ======================= ALT-GÖRÜNÜM: CİHAZ LİSTESİ ======================= -->
+        <!-- Day 7: çoklu client desteği. Endpoints sekmesine tıklanınca ÖNCE bu
+             kart ızgarası açılır (GET /clients'tan gelen TÜM cihazlar); bir karta
+             tıklandığında aşağıdaki #endpoint-detail-panel'e geçiliyor ve o
+             cihazın process listesi/ağ bağlantıları SADECE o client_id ile
+             sorgulanıyor. Böylece çoklu client'a geçildiğinde hangi cihaza
+             tıklandıysa onun verisi görünüyor, başka bir cihazınkiyle karışmıyor. -->
+        <div id="endpoints-list-panel" class="flex flex-col gap-lg">
+          <div class="flex items-center justify-between flex-wrap gap-sm">
+            <div>
+              <h2 class="font-headline-md text-headline-md text-on-surface">Cihazlar</h2>
+              <p class="text-on-surface-variant text-sm">Process listesini ve ağ bağlantılarını görmek için bir cihaza tıkla.</p>
+            </div>
+            <div id="endpoints-summary" class="font-data-mono text-data-mono text-on-surface-variant text-sm">—</div>
+          </div>
+          <div id="endpoints-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-md">
+            <div class="text-center text-on-surface-variant py-lg col-span-full">Cihazlar yükleniyor…</div>
+          </div>
+        </div>
+
+        <!-- ======================= ALT-GÖRÜNÜM: CİHAZ DETAYI ======================= -->
+        <div id="endpoint-detail-panel" class="hidden flex-col gap-lg">
+        <button id="back-to-endpoints" class="self-start flex items-center gap-xs text-on-surface-variant hover:text-primary transition-colors text-sm">
+          <span class="material-symbols-outlined text-[18px]">arrow_back</span>Tüm Cihazlar
+        </button>
+
+        <!-- Endpoint status card -->
+        <!-- Kimlik alanları bilerek ayrı ayrı gösteriliyor (Day 5): Endpoint ID
+             agent_config.json'da kalıcı üretilen, ağ/VM değişse bile SABİT kalan
+             bir kimlik — dashboard "aynı cihaz" eşleştirmesini buna göre yapar.
+             Hostname ise ağa göre değişebilen bir FQDN (örn. farklı ağda farklı
+             görünebilir) olduğu için SADECE bilgi amaçlı gösteriliyor, kimlik
+             olarak kullanılmıyor. Computer Name (macOS ComputerName) ve IP de
+             aynı şekilde bilgi amaçlı. -->
+        <div class="glass rounded-lg p-md flex items-start justify-between flex-wrap gap-md">
+          <div class="flex items-start gap-md flex-1 min-w-[280px]">
+            <div class="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+              <span class="material-symbols-outlined text-primary text-[22px]">laptop_mac</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-baseline gap-sm flex-wrap">
+                <div id="ep-computer-name" class="font-headline-md text-headline-md text-on-surface truncate">—</div>
+                <div id="ep-platform" class="font-data-mono text-data-mono text-on-surface-variant/70 text-[11px]">bekleniyor…</div>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-lg gap-y-1.5 mt-sm">
+                <div class="min-w-0">
+                  <div class="font-label-caps text-label-caps text-on-surface-variant/70 uppercase text-[10px]">Endpoint ID</div>
+                  <div id="ep-endpoint-id" class="font-data-mono text-data-mono text-primary text-[13px] truncate">—</div>
+                </div>
+                <div class="min-w-0">
+                  <div class="font-label-caps text-label-caps text-on-surface-variant/70 uppercase text-[10px]">Hostname</div>
+                  <div id="ep-hostname" class="font-data-mono text-data-mono text-on-surface text-[13px] truncate">—</div>
+                </div>
+                <div class="min-w-0">
+                  <div class="font-label-caps text-label-caps text-on-surface-variant/70 uppercase text-[10px]">IP</div>
+                  <div id="ep-ip" class="font-data-mono text-data-mono text-on-surface text-[13px] truncate">—</div>
+                </div>
+                <div class="min-w-0">
+                  <div class="font-label-caps text-label-caps text-on-surface-variant/70 uppercase text-[10px]">User</div>
+                  <div id="ep-user" class="font-data-mono text-data-mono text-on-surface text-[13px] truncate">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-lg shrink-0">
+            <div class="text-right">
+              <div class="font-label-caps text-label-caps text-on-surface-variant">Son Heartbeat</div>
+              <div id="ep-last-seen" class="font-data-mono text-data-mono text-on-surface">—</div>
+            </div>
+            <div id="ep-status-pill" class="flex items-center gap-xs px-sm py-1 rounded-full border border-outline-variant/60 bg-surface-container-high/60 min-w-[92px] justify-center">
+              <span class="status-dot offline"><span class="status-ping"></span></span>
+              <span lang="en" class="font-label-caps text-label-caps uppercase">Offline</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Overview (Day 4: Bağlantı Testi kaldırıldı, panel tam genişlik) -->
+        <div class="grid grid-cols-1 gap-lg">
+          <section class="flex flex-col">
+            <h2 class="font-headline-md text-headline-md text-on-surface mb-md">Sistem Bilgisi</h2>
+            <div class="glass rounded-lg p-md flex-1 grid grid-cols-3 gap-md">
+              <div class="col-span-3 md:col-span-1 flex flex-col">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">CPU</span>
+                  <span id="sys-cpu-val" class="font-data-mono text-data-mono text-primary">—</span>
+                </div>
+                <div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                  <div id="sys-cpu-bar" class="h-full bg-primary transition-all" style="width:0%"></div>
+                </div>
+              </div>
+              <div class="col-span-3 md:col-span-1 flex flex-col">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">RAM</span>
+                  <span id="sys-ram-val" class="font-data-mono text-data-mono text-primary">—</span>
+                </div>
+                <div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                  <div id="sys-ram-bar" class="h-full bg-primary transition-all" style="width:0%"></div>
+                </div>
+                <p id="sys-ram-used" class="text-[11px] text-on-surface-variant mt-1"></p>
+              </div>
+              <div class="col-span-3 md:col-span-1 flex justify-between border-t md:border-t-0 md:border-l border-outline-variant/40 pt-sm md:pt-0 md:pl-md mt-sm md:mt-0">
+                <div class="flex flex-col">
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">Disk Read</span>
+                  <span id="sys-disk-read" class="font-data-mono text-data-mono text-on-surface">—</span>
+                </div>
+                <div class="flex flex-col text-right">
+                  <span class="font-label-caps text-label-caps text-on-surface-variant">Disk Write</span>
+                  <span id="sys-disk-write" class="font-data-mono text-data-mono text-on-surface">—</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Process Monitor -->
+        <section class="flex flex-col flex-1 min-h-[320px]">
+          <div class="flex items-center justify-between mb-md flex-wrap gap-sm">
+            <div class="flex items-center gap-sm">
+              <span class="material-symbols-outlined text-on-surface-variant">memory</span>
+              <h2 class="font-headline-md text-headline-md text-on-surface">Process Monitor</h2>
+            </div>
+            <div class="flex items-center gap-sm flex-wrap">
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+                <input id="process-search" type="text" placeholder="Process, PID, parametre ara…"
+                  class="bg-surface-container-high border border-outline-variant/60 rounded-lg pl-8 pr-sm py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary w-[220px]"/>
+              </div>
+              <select id="process-type-filter" class="bg-surface-container-high border border-outline-variant/60 rounded-lg px-sm py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary">
+                <option value="all">Tüm türler</option>
+                <option value="shell">Shell</option>
+                <option value="batch">Batch / Script</option>
+                <option value="system_service">Sistem Servisi</option>
+                <option value="user_application">Kullanıcı Uygulaması</option>
+                <option value="background_process">Arka Plan</option>
+                <option value="other">Diğer</option>
+              </select>
+              <div id="process-count-badge" class="font-data-mono text-data-mono text-on-surface-variant text-xs whitespace-nowrap"></div>
+            </div>
+          </div>
+          <div class="glass rounded-lg overflow-hidden flex flex-col flex-1 border border-outline-variant/40">
+            <div class="overflow-auto flex-1">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-surface-container-high sticky top-0 z-10 border-b-2 border-primary">
+                  <tr>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">PID</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Process</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Tür</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Kullanıcı</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Kategori</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant text-right">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody id="process-tbody" class="font-data-mono text-data-mono text-on-surface">
+                  <tr><td colspan="6" class="text-center py-lg text-on-surface-variant">Veri bekleniyor — get_process_list tetikleniyor…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p class="text-[11px] text-on-surface-variant/60 mt-xs">Bir satıra tıklayınca process detayı (tetikleyen kullanıcı, zaman, parametreler, ağ bağlantıları) açılır. Kill butonu ayrı bir onay adımı gerektirir.</p>
+        </section>
+
+        <!-- Canlı Ağ Bağlantı İzleme -->
+        <section class="flex flex-col flex-1 min-h-[280px]">
+          <div class="flex items-center justify-between mb-md">
+            <div class="flex items-center gap-sm">
+              <span class="material-symbols-outlined text-on-surface-variant">lan</span>
+              <h2 class="font-headline-md text-headline-md text-on-surface">Canlı Ağ Bağlantıları</h2>
+              <span class="status-dot online ml-1"></span>
+            </div>
+            <div id="connections-count-badge" class="font-data-mono text-data-mono text-on-surface-variant text-xs"></div>
+          </div>
+          <div class="glass rounded-lg overflow-hidden flex flex-col flex-1 border border-outline-variant/40">
+            <div class="overflow-auto flex-1 max-h-[360px]">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-surface-container-high sticky top-0 z-10 border-b-2 border-primary">
+                  <tr>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Bağlantı Parametresi</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Yerel IP:Port</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Uzak IP:Port</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant">Protokol</th>
+                    <th class="py-sm px-md font-label-caps text-label-caps text-on-surface-variant text-right">PID</th>
+                  </tr>
+                </thead>
+                <tbody id="connections-tbody" class="font-data-mono text-data-mono text-on-surface">
+                  <tr><td colspan="5" class="text-center py-lg text-on-surface-variant">Veri bekleniyor…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        </div><!-- /#endpoint-detail-panel -->
+      </section>
+
+      <!-- ======================= VIEW: LOGS ======================= -->
+      <section id="view-logs" class="view flex-col gap-gutter">
+        <!-- Log dosyası sekmeleri — server/logs/ altındaki GERÇEK .log dosyaları,
+             /logs/files'tan dinamik olarak çekiliyor (uydurma/sabit kodlanmış
+             bir liste değil). Agent'ın kendi logları (heartbeat/commands) burada
+             YOK, çünkü onlar agent'ın kendi diskinde — bkz. server.py /logs/files
+             docstring'i. Yan yana, tıklanabilir pill'ler; birine tıklayınca
+             aşağıdaki panel o dosyanın ham satırlarını gösterir. -->
+        <div id="log-file-tabs" class="flex items-center gap-sm flex-wrap"></div>
+
+        <div class="glass p-md rounded-lg flex justify-between items-center shrink-0 gap-md flex-wrap">
+          <div id="active-log-label" class="flex items-center gap-xs px-md py-sm rounded bg-primary text-on-primary font-data-mono text-data-mono font-bold">
+            <span class="material-symbols-outlined text-[16px]">description</span>
+            <span id="active-log-name">—</span>
+          </div>
+          <!-- Serbest metin arama: timestamp/hostname/msgid/structured-data/mesaj
+               HAM satır üzerinde alt dize eşleşmesi (bkz. server.py /logs/{filename}?q=).
+               MsgID dropdown ayrı bir alan olarak TAM eşleşme filtreliyor;
+               seçenekler /logs/{filename}/msgids'ten (dosyanın tamamından) geliyor. -->
+          <div class="flex items-center gap-sm flex-1 min-w-[280px] justify-end">
+            <div class="relative flex-1 max-w-[320px]">
+              <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none">search</span>
+              <input id="logs-search" type="text" placeholder="Ara… (örn. 09:38 ya da bir kelime)"
+                class="w-full pl-8 pr-2 py-sm rounded-lg bg-surface-container-high border border-outline-variant/60 font-data-mono text-data-mono text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary/60" />
+            </div>
+            <select id="logs-msgid-filter"
+              class="py-sm px-sm rounded-lg bg-surface-container-high border border-outline-variant/60 font-data-mono text-data-mono text-sm text-on-surface focus:outline-none focus:border-primary/60">
+              <option value="">Tüm MsgID'ler</option>
+            </select>
+          </div>
+          <div class="font-data-mono text-data-mono text-on-surface-variant text-xs whitespace-nowrap" id="logs-count"></div>
+        </div>
+        <div class="terminal-bg rounded-lg border border-outline-variant/40 flex-1 overflow-hidden flex flex-col shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]">
+          <div id="logs-body" class="overflow-y-auto flex-1 font-data-mono text-data-mono text-[11.5px] leading-snug">
+            <div class="text-center text-on-surface-variant py-lg">Bir log dosyası seç…</div>
+          </div>
+        </div>
+
+        <!-- Kill Onay Geçmişi — yapısal (sütunlu) görünüm. Aynı olayların ham
+             RFC5424 satırlarını görmek istersen yukarıdaki dosya sekmelerinden
+             "kill_audit.log"u seçebilirsin; bu tablo aynı veriyi request/pid/
+             durum sütunlarıyla taranabilir hale getiriyor. -->
+        <div class="glass p-md rounded-lg flex justify-between items-center shrink-0 mt-sm">
+          <div class="flex items-center gap-xs px-md py-sm rounded bg-danger text-[#690005] font-data-mono text-data-mono font-bold">
+            <span class="material-symbols-outlined text-[16px]">dangerous</span>
+            Kill Onay Geçmişi
+          </div>
+          <div class="font-data-mono text-data-mono text-on-surface-variant text-xs" id="kill-audit-count"></div>
+        </div>
+        <div class="terminal-bg rounded-lg border border-outline-variant/40 flex-1 overflow-hidden flex flex-col shadow-[inset_0_0_20px_rgba(0,0,0,0.8)] max-h-[280px]">
+          <div lang="en" class="bg-surface-container-highest grid grid-cols-[110px_170px_90px_100px_1fr] items-center px-md py-sm border-b border-danger/40 shrink-0 font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
+            <div>Request</div>
+            <div>Timestamp</div>
+            <div>PID</div>
+            <div>Durum</div>
+            <div>Detay</div>
+          </div>
+          <div id="kill-audit-body" class="overflow-y-auto flex-1 font-data-mono text-data-mono">
+            <div class="text-center text-on-surface-variant py-lg">Henüz kill isteği yok.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= VIEW: SETTINGS ======================= -->
+      <section id="view-settings" class="view flex-col gap-lg max-w-3xl">
+        <div>
+          <h2 class="font-display text-display text-on-surface mb-1">Sunucu Durumu</h2>
+          <p class="text-on-surface-variant">Argus server'ın mevcut yapılandırması ve bağlantı durumu (salt okunur).</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+          <section class="glass rounded-xl p-lg flex flex-col items-center text-center">
+            <div id="settings-status-icon" class="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center mb-md border border-outline-variant relative">
+              <span class="material-symbols-outlined text-on-surface-variant text-[30px]">security</span>
+              <div class="status-dot offline absolute bottom-1 right-1 border-2 border-surface-container"></div>
+            </div>
+            <h3 id="settings-status-text" class="font-headline-md text-headline-md text-on-surface mb-xs">Bağlantı bekleniyor</h3>
+            <p id="settings-hostname" class="font-data-mono text-data-mono text-on-surface-variant bg-surface-container-lowest px-sm py-1 rounded">—</p>
+          </section>
+
+          <section class="glass rounded-xl p-lg space-y-sm">
+            <h4 class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-sm">Client Bilgisi</h4>
+            <div class="flex justify-between"><span class="text-on-surface-variant text-sm">Endpoint ID</span><span id="settings-endpoint-id" class="font-data-mono text-data-mono text-primary">—</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant text-sm">Platform</span><span id="settings-platform" class="font-data-mono text-data-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant text-sm">Son heartbeat</span><span id="settings-last-hb" class="font-data-mono text-data-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-on-surface-variant text-sm">Process sayısı</span><span id="settings-proc-count" class="font-data-mono text-data-mono">—</span></div>
+          </section>
+        </div>
+
+        <section class="glass rounded-xl p-lg space-y-sm">
+          <h3 class="font-headline-md text-headline-md text-primary flex items-center gap-sm border-b border-outline-variant/40 pb-sm mb-sm">
+            <span class="material-symbols-outlined text-[20px]">dns</span>
+            Sunucu Yapılandırması
+          </h3>
+          <div class="space-y-1 font-data-mono text-data-mono">
+            <div class="flex justify-between border-b border-outline-variant/20 py-2"><span class="text-on-surface-variant">Host</span><span id="cfg-host">—</span></div>
+            <div class="flex justify-between border-b border-outline-variant/20 py-2"><span class="text-on-surface-variant">Port</span><span id="cfg-port">—</span></div>
+            <div class="flex justify-between border-b border-outline-variant/20 py-2"><span class="text-on-surface-variant">DB dosyası</span><span id="cfg-db">—</span></div>
+            <div class="flex justify-between border-b border-outline-variant/20 py-2"><span class="text-on-surface-variant">Heartbeat retention</span><span id="cfg-retention">—</span></div>
+            <div class="flex justify-between py-2"><span class="text-on-surface-variant">Temizlik aralığı</span><span id="cfg-cleanup">—</span></div>
+          </div>
+          <p class="text-[12px] text-on-surface-variant/70 pt-sm">
+            Bu ayarlar salt okunur gösteriliyor. Değiştirmek için sunucu tarafında
+            <code class="text-primary">server/server_config.json</code> dosyasını düzenleyip
+            sunucuyu yeniden başlatman gerekiyor. Agent'ın sunucu adresi ise
+            <code class="text-primary">agent/agent_config.json</code>'da ayrı olarak tutuluyor
+            (agent'ın kendi HTTP arayüzü olmadığı için buradan görüntülenemiyor).
+          </p>
+        </section>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============================== PROCESS DETAIL MODAL ============================== -->
+<div id="detail-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-md">
+  <div class="glass rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col border border-outline-variant/60">
+    <div class="flex items-center justify-between px-lg py-md border-b border-outline-variant/40 shrink-0">
+      <div class="flex items-center gap-sm">
+        <span class="material-symbols-outlined text-primary">memory</span>
+        <h3 id="detail-title" class="font-headline-md text-headline-md text-on-surface">Process Detayı</h3>
+      </div>
+      <button id="detail-close" class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="overflow-y-auto p-lg flex flex-col gap-md">
+      <div id="detail-stale-banner" class="hidden flex items-center gap-sm px-md py-sm rounded-lg bg-warning/10 border border-warning/30 text-warning text-sm">
+        <span class="material-symbols-outlined text-[18px]">warning</span>
+        Bu process artık çalışmıyor (son bilinen veri gösteriliyor).
+      </div>
+      <div class="grid grid-cols-2 gap-md font-data-mono text-data-mono">
+        <div><span class="text-on-surface-variant block text-[11px] uppercase font-label-caps">PID</span><span id="detail-pid" class="text-on-surface">—</span></div>
+        <div><span class="text-on-surface-variant block text-[11px] uppercase font-label-caps">Tür</span><span id="detail-type" class="text-on-surface">—</span></div>
+        <div><span class="text-on-surface-variant block text-[11px] uppercase font-label-caps">Kim tetiklemiş (Kullanıcı)</span><span id="detail-user" class="text-on-surface">—</span></div>
+        <div><span class="text-on-surface-variant block text-[11px] uppercase font-label-caps">Ne zaman (Snapshot)</span><span id="detail-time" class="text-on-surface">—</span></div>
+      </div>
+      <div>
+        <span class="text-on-surface-variant block text-[11px] uppercase font-label-caps mb-1">Aldığı Parametreler (cmdline)</span>
+        <div id="detail-cmdline" class="font-data-mono text-data-mono text-on-surface bg-surface-container-lowest rounded p-sm max-h-48 overflow-y-auto leading-relaxed">—</div>
+      </div>
+      <div>
+        <span class="text-on-surface-variant block text-[11px] uppercase font-label-caps mb-1">Ağ Bağlantı Detayları</span>
+        <div class="glass rounded-lg overflow-hidden border border-outline-variant/40">
+        <!-- Sütunlar modal genişliğini aşabiliyor (uzun IPv6 adresleri vb.);
+             dış div rounded köşeler için overflow-hidden kalsın, gerçek yatay
+             kaydırma bu iç div'de olsun — ana process tablosuyla aynı pattern. -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs min-w-[560px]">
+            <thead class="bg-surface-container-high">
+              <tr>
+                <th class="py-xs px-sm font-label-caps text-label-caps text-on-surface-variant whitespace-nowrap">Yerel</th>
+                <th class="py-xs px-sm font-label-caps text-label-caps text-on-surface-variant whitespace-nowrap">Uzak</th>
+                <th class="py-xs px-sm font-label-caps text-label-caps text-on-surface-variant whitespace-nowrap">Protokol</th>
+                <th class="py-xs px-sm font-label-caps text-label-caps text-on-surface-variant whitespace-nowrap">Durum</th>
+              </tr>
+            </thead>
+            <tbody id="detail-connections" class="font-data-mono text-data-mono text-on-surface"></tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== KILL ONAY MODAL ============================== -->
+<div id="kill-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-md">
+  <div class="glass rounded-xl w-full max-w-md overflow-hidden flex flex-col border border-danger/40">
+    <div class="flex items-center justify-between px-lg py-md border-b border-outline-variant/40 bg-danger-container/30">
+      <div class="flex items-center gap-sm">
+        <span class="material-symbols-outlined text-danger">dangerous</span>
+        <h3 class="font-headline-md text-headline-md text-on-surface">Process Sonlandırma Onayı</h3>
+      </div>
+      <button id="kill-close" class="text-on-surface-variant hover:text-on-surface">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="p-lg flex flex-col gap-md">
+      <p class="text-sm text-on-surface-variant">
+        <span id="kill-target-name" class="text-on-surface font-medium">—</span> (PID <span id="kill-target-pid" class="font-data-mono text-data-mono text-on-surface">—</span>) sonlandırılacak.
+        Bu işlem admin yetkisi ve onay gerektirir; her adım (istek/onay/red/agent'a ulaşma/sonuç) sunucu loglarına yazılır.
+      </p>
+      <div class="flex flex-col gap-1">
+        <label class="font-label-caps text-label-caps text-on-surface-variant uppercase">Gerekçe (opsiyonel)</label>
+        <input id="kill-reason" type="text" placeholder="örn. yanıt vermeyen powershell süreci"
+          class="bg-surface-container-high border border-outline-variant/60 rounded-lg px-sm py-2 text-sm text-on-surface focus:outline-none focus:border-primary"/>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="font-label-caps text-label-caps text-on-surface-variant uppercase">Admin Parolası</label>
+        <input id="kill-passcode" type="password" placeholder="onay için admin parolası"
+          class="bg-surface-container-high border border-outline-variant/60 rounded-lg px-sm py-2 text-sm text-on-surface focus:outline-none focus:border-danger"/>
+      </div>
+      <div id="kill-status-log" class="hidden flex-col gap-1 font-data-mono text-data-mono text-xs bg-surface-container-lowest rounded p-sm"></div>
+      <div class="flex justify-end gap-sm mt-sm">
+        <button id="kill-cancel" class="px-md py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors text-sm">Vazgeç</button>
+        <button id="kill-confirm" class="px-md py-2 rounded-lg bg-danger text-[#690005] font-bold hover:opacity-90 transition-opacity text-sm flex items-center gap-xs">
+          <span class="material-symbols-outlined text-[18px]">dangerous</span>Yetkilendir ve Öldür
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========================================================================
+// Argus Dashboard — istemci tarafı mantık
+// Sunucu adresi burada. VM'e taşınırsa ya da farklı bir makineden
+// açılırsa sadece bu satırı değiştirmen yeterli.
+// ========================================================================
+const SERVER_URL = "http://127.0.0.1:8000";
+
+// Endpoints görünümü açıkken otomatik tetiklenecek komutlar arasındaki süre.
+const AUTO_REFRESH_MS = 15000;
+// Komutu kuyruğa ekledikten sonra sonucun gelmesi için beklenecek süre
+// (heartbeat interval'ı 3sn + biraz pay).
+const RESULT_DELAY_MS = 4000;
+
+let currentView = "endpoints";
+let refreshTimer = null;
+
+// ------------------------------------------------------------------
+// Day 7: çoklu client desteği. Endpoints sekmesinin kendi içinde iki
+// alt-görünümü var: "list" (tüm cihaz kartları, GET /clients) ve
+// "detail" (seçili tek cihazın process/ağ/sistem paneli, client_id ile
+// filtrelenmiş). selectedClientId, aşağıdaki TÜM ilgili fetch'lere
+// (state/processes/queue_command/kill) eklenen hedef cihaz kimliği.
+// Sayfa yenilense bile son seçilen cihazda kalınsın diye localStorage'da
+// tutuluyor; o cihaz artık listede yoksa (bkz. selectEndpoint çağrıları)
+// otomatik olarak listeye geri dönülüyor.
+// ------------------------------------------------------------------
+let endpointsSubView = "list";
+let selectedClientId = localStorage.getItem("argus_selected_client_id");
+selectedClientId = selectedClientId ? Number(selectedClientId) : null;
+let endpointsSubTimer = null;
+
+async function fetchJSON(path, options) {
+  try {
+    const res = await fetch(SERVER_URL + path, options);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function queueCommand(command, params = {}, clientId = selectedClientId) {
+  return fetchJSON("/queue_command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command, params, client_id: clientId }),
+  });
+}
+
+function timeAgo(isoString) {
+  if (!isoString) return "—";
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const s = Math.floor(diffMs / 1000);
+  if (s < 5) return "az önce";
+  if (s < 60) return `${s} sn önce`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} dk önce`;
+  const h = Math.floor(m / 60);
+  return `${h} sa önce`;
+}
+
+function isOnline(isoString) {
+  if (!isoString) return false;
+  // Heartbeat 3sn'de bir geliyor; 12sn'den eskiyse offline say (4 kaçırılmış heartbeat payı)
+  return (Date.now() - new Date(isoString).getTime()) < 12000;
+}
+
+function setStatusDot(el, online) {
+  el.classList.toggle("online", online);
+  el.classList.toggle("offline", !online);
+  const ping = el.querySelector(".status-ping");
+  if (ping) ping.classList.toggle("online", online);
+}
+
+// ------------------------------------------------------------------
+// ENDPOINTS view — CİHAZ LİSTESİ (alt-görünüm: "list")
+// ------------------------------------------------------------------
+function endpointCardHtml(c) {
+  const name = c.computer_name || c.hostname || "—";
+  const lastSeen = c.hb_timestamp_computed || (c.last_seen ? timeAgo(c.last_seen) : "—");
+  return `
+    <button data-client-id="${c.client_id}" class="endpoint-card glass rounded-lg p-md flex items-start gap-md text-left hover:border-primary/60 transition-colors">
+      <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined text-primary text-[20px]">laptop_mac</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-xs">
+          <span class="status-dot ${c.online ? "online" : "offline"} shrink-0">${c.online ? '<span class="status-ping online"></span>' : ""}</span>
+          <span class="font-headline-md text-headline-md text-on-surface truncate">${escapeHtml(name)}</span>
+        </div>
+        <div class="font-data-mono text-data-mono text-on-surface-variant text-[12px] truncate mt-0.5">${escapeHtml(c.local_ip || "—")} · ${escapeHtml(c.user || "—")}</div>
+        <div class="text-on-surface-variant text-[11px] mt-1">Son heartbeat: ${lastSeen}</div>
+      </div>
+    </button>`;
+}
+
+async function refreshEndpointsList() {
+  const data = await fetchJSON("/clients");
+  const clients = (data && data.clients) || [];
+  const grid = document.getElementById("endpoints-grid");
+
+  const onlineCount = clients.filter(c => c.online).length;
+  document.getElementById("endpoints-summary").textContent = clients.length
+    ? `${onlineCount}/${clients.length} online`
+    : "";
+
+  if (!clients.length) {
+    grid.innerHTML = `<div class="text-center text-on-surface-variant py-lg col-span-full">Henüz bir cihaz bağlanmadı.</div>`;
+    return;
+  }
+
+  grid.innerHTML = clients.map(c => {
+    c.hb_timestamp_computed = c.last_seen ? timeAgo(c.last_seen) : "—";
+    return endpointCardHtml(c);
+  }).join("");
+
+  grid.querySelectorAll(".endpoint-card").forEach(card => {
+    card.addEventListener("click", () => selectEndpoint(Number(card.dataset.clientId)));
+  });
+
+  // Liste görünümündeyken üst bardaki global durum rozeti tek bir cihazı
+  // değil, tüm filoyu özetler (en az bir cihaz online ise "aktif" say).
+  if (endpointsSubView === "list") {
+    const gStatus = document.getElementById("global-status");
+    setStatusDot(gStatus.querySelector(".status-dot"), onlineCount > 0);
+    document.getElementById("global-status-text").textContent = clients.length
+      ? `${onlineCount}/${clients.length} Cihaz Online`
+      : "Cihaz Yok";
+    document.getElementById("last-update").textContent = "";
+  }
+
+  // Seçili cihaz artık listede yoksa (sunucu yeniden başladı vb.) sessizce temizle.
+  if (selectedClientId !== null && !clients.some(c => c.client_id === selectedClientId)) {
+    selectedClientId = null;
+    localStorage.removeItem("argus_selected_client_id");
+  }
+}
+
+function showEndpointsSubview(sub) {
+  endpointsSubView = sub;
+  document.getElementById("endpoints-list-panel").classList.toggle("hidden", sub !== "list");
+  document.getElementById("endpoint-detail-panel").classList.toggle("hidden", sub !== "detail");
+  document.getElementById("endpoint-detail-panel").classList.toggle("flex", sub === "detail");
+
+  clearInterval(endpointsSubTimer);
+  if (sub === "list") {
+    refreshEndpointsList();
+    endpointsSubTimer = setInterval(refreshEndpointsList, 3000);
+  } else {
+    refreshState();
+    refreshProcesses();
+    endpointsAutoRefresh();
+    endpointsSubTimer = setInterval(refreshState, 3000);
+    // process listesi ayrı, daha seyrek bir ritimde (AUTO_REFRESH_MS) tetiklenir — bkz. aşağıdaki ikinci interval.
+    clearInterval(window._processPollTimer);
+    window._processPollTimer = setInterval(endpointsAutoRefresh, AUTO_REFRESH_MS);
+  }
+}
+
+function selectEndpoint(clientId) {
+  selectedClientId = clientId;
+  localStorage.setItem("argus_selected_client_id", String(clientId));
+  showEndpointsSubview("detail");
+}
+
+function backToEndpointsList() {
+  clearInterval(window._processPollTimer);
+  selectedClientId = null;
+  localStorage.removeItem("argus_selected_client_id");
+  showEndpointsSubview("list");
+}
+document.getElementById("back-to-endpoints").addEventListener("click", backToEndpointsList);
+
+// ------------------------------------------------------------------
+// ENDPOINTS view — CİHAZ DETAYI (alt-görünüm: "detail", tek client_id'ye göre)
+// ------------------------------------------------------------------
+async function refreshState() {
+  if (selectedClientId === null) return;
+  const data = await fetchJSON(`/state?client_id=${selectedClientId}`);
+  const hb = data && data.latest_telemetry;
+  const online = hb ? isOnline(hb.timestamp) : false;
+
+  document.getElementById("last-update").textContent = hb ? `güncellendi: ${timeAgo(hb.timestamp)}` : "";
+
+  const gStatus = document.getElementById("global-status");
+  setStatusDot(gStatus.querySelector(".status-dot"), online);
+  document.getElementById("global-status-text").textContent = online ? "Sistem Aktif" : "Bağlantı Yok";
+
+  document.getElementById("ep-computer-name").textContent = hb ? (hb.computer_name || hb.hostname) : "—";
+  document.getElementById("ep-endpoint-id").textContent = hb ? (hb.endpoint_id || "—") : "—";
+  document.getElementById("ep-hostname").textContent = hb ? hb.hostname : "—";
+  document.getElementById("ep-ip").textContent = hb ? (hb.local_ip || "—") : "—";
+  document.getElementById("ep-user").textContent = hb ? hb.user : "—";
+  document.getElementById("ep-platform").textContent = hb ? hb.system_info.platform : "bekleniyor…";
+  document.getElementById("ep-last-seen").textContent = hb ? timeAgo(hb.timestamp) : "—";
+
+  const pill = document.getElementById("ep-status-pill");
+  // Bilerek textContent yerine tam innerHTML rebuild -- Safari'nin backdrop-filter
+  // katmanlarında bazen eski pikselleri temizlememesi (hayalet metin) sorununu
+  // kökten çözüyor; her tazelemede eski node'lar tamamen atılıp yenisi çiziliyor.
+  pill.innerHTML = `
+    <span class="status-dot ${online ? "online" : "offline"}">${online ? '<span class="status-ping online"></span>' : ""}</span>
+    <span lang="en" class="font-label-caps text-label-caps uppercase">${online ? "Online" : "Offline"}</span>
+  `;
+
+  // Settings görünümündeki durum kartı da aynı veriden besleniyor
+  const sIcon = document.getElementById("settings-status-icon");
+  const sDot = sIcon.querySelector(".status-dot");
+  sDot.className = `status-dot ${online ? "online" : "offline"} absolute bottom-1 right-1 border-2 border-surface-container`;
+  document.getElementById("settings-status-text").textContent = online ? "Agent Aktif" : "Bağlantı Yok";
+  document.getElementById("settings-hostname").textContent = hb ? (hb.computer_name || hb.hostname) : "—";
+  document.getElementById("settings-endpoint-id").textContent = hb ? (hb.endpoint_id || "—") : "—";
+  document.getElementById("settings-platform").textContent = hb ? hb.system_info.platform : "—";
+  document.getElementById("settings-last-hb").textContent = hb ? `${timeAgo(hb.timestamp)}` : "—";
+  document.getElementById("settings-proc-count").textContent = hb ? hb.process_count : "—";
+
+  if (hb) {
+    const si = hb.system_info;
+    document.getElementById("sys-cpu-val").textContent = `${si.cpu_percent}%`;
+    document.getElementById("sys-cpu-bar").style.width = `${Math.min(si.cpu_percent, 100)}%`;
+    document.getElementById("sys-ram-val").textContent = `${si.ram_percent}%`;
+    document.getElementById("sys-ram-bar").style.width = `${Math.min(si.ram_percent, 100)}%`;
+    document.getElementById("sys-ram-used").textContent = `${si.ram_used_mb.toFixed(0)} MB kullanılıyor`;
+    document.getElementById("sys-disk-read").textContent = `${(si.disk_read_mb / 1024).toFixed(1)} GB`;
+    document.getElementById("sys-disk-write").textContent = `${(si.disk_write_mb / 1024).toFixed(1)} GB`;
+
+    // yüksek CPU/RAM'de renk teal->red geçişi (DESIGN.md "sharp step" kuralı)
+    document.getElementById("sys-cpu-bar").classList.toggle("bg-danger", si.cpu_percent > 90);
+    document.getElementById("sys-cpu-bar").classList.toggle("bg-primary", si.cpu_percent <= 90);
+    document.getElementById("sys-ram-bar").classList.toggle("bg-danger", si.ram_percent > 90);
+    document.getElementById("sys-ram-bar").classList.toggle("bg-primary", si.ram_percent <= 90);
+  }
+}
+
+function categoryBadge(category) {
+  const map = {
+    system_service: { label: "System Service", icon: "dns", cls: "bg-surface-container-high text-on-surface-variant border-outline-variant/50" },
+    user_application: { label: "User App", icon: "apps", cls: "bg-primary/10 text-primary border-primary/30" },
+    background_process: { label: "Background", icon: "layers", cls: "bg-surface-container-high text-on-surface-variant border-outline-variant/50" },
+  };
+  const c = map[category] || { label: category || "—", icon: "help", cls: "bg-surface-container-high text-on-surface-variant border-outline-variant/50" };
+  return `<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded border text-[11px] ${c.cls}">
+            <span class="material-symbols-outlined text-[13px]">${c.icon}</span>${c.label}
+          </span>`;
+}
+
+function userBadge(realUser) {
+  return realUser
+    ? `<span class="inline-flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[14px]">person</span>Real User</span>`
+    : `<span class="inline-flex items-center gap-1 text-on-surface-variant"><span class="material-symbols-outlined text-[14px]">admin_panel_settings</span>System Account</span>`;
+}
+
+// processByPid: en son çekilen process listesinin PID -> process nesnesi
+// haritası. Arama/filtre kutuları yeniden fetch yapmadan anında yeniden
+// render edebilsin, ve process detay modalı satır tıklamasında veriyi
+// hızlıca bulabilsin diye tutuluyor.
+let latestProcesses = [];
+let processByPid = {};
+// Modal açıkken hangi PID'e ait olduğunu takip eder — her 15sn'lik process
+// yenileme döngüsünde modal içeriğini sessizce güncellemek için kullanılır
+// (bkz. refreshProcesses sonu ve populateDetailModal).
+let currentModalPid = null;
+
+// cmdline artık agent'tan DİZİ olarak geliyor (bkz. collectors.py) — boşluk
+// içeren argümanları kaybetmeden geri döndürülebilir tek string'e ihtiyaç
+// duyan yerler (arama, tür sezgisi, tooltip) için bu yardımcıyı kullan.
+// Eski (henüz güncellenmemiş bir agent'tan gelen) string cmdline'ları da
+// bozmadan destekliyor.
+function cmdlineText(cmdline) {
+  return Array.isArray(cmdline) ? cmdline.join(" ") : (cmdline || "");
+}
+
+// Process detay modalındaki "Aldığı Parametreler" bloğu için: her argümanı
+// KENDİ satırında, terminal renklendirmesi gibi gösterir — çalıştırılabilir
+// yol normal renkte, --flag/-flag isimleri vurgulu (mor), "--flag=değer"
+// biçimindeki argümanlarda değer ayrı renkte (mavi). Eski (string) cmdline
+// gelirse tek satır olarak gösterir, bozulmaz.
+function renderCmdlineLines(cmdline) {
+  const args = Array.isArray(cmdline) ? cmdline : (cmdline ? [cmdline] : []);
+  if (!args.length) return `<div class="text-on-surface-variant">(parametre yok)</div>`;
+
+  return args.map((arg, i) => {
+    let inner;
+    if (i === 0) {
+      inner = `<span class="text-on-surface">${escapeHtml(arg)}</span>`;
+    } else if (arg.startsWith("-")) {
+      const eq = arg.indexOf("=");
+      if (eq > -1) {
+        inner = `<span class="text-primary">${escapeHtml(arg.slice(0, eq))}</span>`
+          + `<span class="text-on-surface-variant">=</span>`
+          + `<span class="text-[#82aaff]">${escapeHtml(arg.slice(eq + 1))}</span>`;
+      } else {
+        inner = `<span class="text-primary">${escapeHtml(arg)}</span>`;
+      }
+    } else {
+      inner = `<span class="text-on-surface-variant">${escapeHtml(arg)}</span>`;
+    }
+    return `<div class="whitespace-pre-wrap break-all">${inner}</div>`;
+  }).join("");
+}
+
+// Process türünü isim/cmdline üzerinden sezgisel olarak belirler.
+// Sunucudan gelen "category" (system_service/user_application/
+// background_process) zaten var; bu ek olarak Shell/Batch ayrımını
+// arama/filtreleme için ortaya çıkarıyor (requirement: "Shell mi,
+// Batch mi (veya diğer process tipleri)" araması).
+const SHELL_PATTERN = /\b(bash|zsh|sh|fish|powershell|pwsh|cmd)(\.exe)?$/i;
+const BATCH_PATTERN = /\.(bat|cmd|ps1)\b|cmd\.exe/i;
+
+function detectProcessType(p) {
+  const name = (p.name || "").toLowerCase();
+  const cmd = cmdlineText(p.cmdline).toLowerCase();
+  if (SHELL_PATTERN.test(name) || /powershell|pwsh|\/bin\/(ba|z)?sh/.test(cmd)) return "shell";
+  if (BATCH_PATTERN.test(name) || BATCH_PATTERN.test(cmd)) return "batch";
+  if (p.category === "system_service" || p.category === "user_application" || p.category === "background_process") {
+    return p.category;
+  }
+  return "other";
+}
+
+const TYPE_LABELS = {
+  shell: { label: "Shell", cls: "bg-warning/10 text-warning border-warning/30", icon: "terminal" },
+  batch: { label: "Batch/Script", cls: "bg-primary/10 text-primary border-primary/30", icon: "description" },
+  system_service: { label: "Sistem Servisi", cls: "bg-surface-container-high text-on-surface-variant border-outline-variant/50", icon: "dns" },
+  user_application: { label: "Kullanıcı Uyg.", cls: "bg-primary/10 text-primary border-primary/30", icon: "apps" },
+  background_process: { label: "Arka Plan", cls: "bg-surface-container-high text-on-surface-variant border-outline-variant/50", icon: "layers" },
+  other: { label: "Diğer", cls: "bg-surface-container-high text-on-surface-variant border-outline-variant/50", icon: "help" },
+};
+
+function typeBadge(type) {
+  const t = TYPE_LABELS[type] || TYPE_LABELS.other;
+  return `<span class="inline-flex items-center gap-1 px-2 py-[2px] rounded border text-[11px] ${t.cls}">
+            <span class="material-symbols-outlined text-[13px]">${t.icon}</span>${t.label}
+          </span>`;
+}
+
+function applyProcessFilter(processes) {
+  const q = (document.getElementById("process-search").value || "").trim().toLowerCase();
+  const typeFilter = document.getElementById("process-type-filter").value;
+  return processes.filter(p => {
+    const type = detectProcessType(p);
+    if (typeFilter !== "all" && type !== typeFilter) return false;
+    if (!q) return true;
+    return (
+      String(p.pid).includes(q) ||
+      (p.name || "").toLowerCase().includes(q) ||
+      cmdlineText(p.cmdline).toLowerCase().includes(q) ||
+      (p.user || "").toLowerCase().includes(q)
+    );
+  });
+}
+
+// Process'in en az bir GERÇEKTEN kurulmuş (ESTABLISHED) bağlantısı var mı —
+// LISTEN (henüz kimse bağlanmamış) ya da UDP (bağlantısız) sayılmıyor,
+// sadece fiilen veri akışı olabilecek canlı bağlantılar "aktif" sayılıyor.
+function activeConnectionCount(p) {
+  return (p.connections || []).filter(c => c.status === "ESTABLISHED").length;
+}
+
+function renderProcessTable() {
+  const tbody = document.getElementById("process-tbody");
+  const badge = document.getElementById("process-count-badge");
+
+  if (!latestProcesses.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-lg text-on-surface-variant">Henüz process listesi alınmadı</td></tr>`;
+    badge.textContent = "";
+    return;
+  }
+
+  const filtered = applyProcessFilter(latestProcesses);
+  badge.textContent = `${filtered.length}/${latestProcesses.length} process`;
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-lg text-on-surface-variant">Eşleşen process yok</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(p => {
+    const activeConns = activeConnectionCount(p);
+    return `
+    <tr class="zebra process-row border-b border-outline-variant/20 hover:bg-surface-container-high/40 transition-colors cursor-pointer ${p.real_user ? "" : "opacity-70"}" data-pid="${p.pid}">
+      <td class="py-xs px-md text-on-surface-variant">${p.pid}</td>
+      <td class="py-xs px-md font-medium text-on-surface truncate max-w-[200px]" title="${escapeHtml(cmdlineText(p.cmdline) || p.name)}">
+        <span class="inline-flex items-center gap-xs">
+          ${activeConns > 0
+            ? `<span class="status-dot online shrink-0" title="${activeConns} aktif bağlantı"><span class="status-ping online"></span></span>`
+            : `<span class="inline-block w-2 h-2 shrink-0"></span>`}
+          <span class="truncate">${escapeHtml(p.name)}</span>
+        </span>
+      </td>
+      <td class="py-xs px-md">${typeBadge(detectProcessType(p))}</td>
+      <td class="py-xs px-md">
+        <div class="flex flex-col">
+          <span class="text-on-surface">${escapeHtml(p.user)}</span>
+          ${userBadge(p.real_user)}
+        </div>
+      </td>
+      <td class="py-xs px-md">${categoryBadge(p.category)}</td>
+      <td class="py-xs px-md text-right">
+        <button class="kill-row-btn inline-flex items-center gap-1 px-sm py-1 rounded border border-danger/40 text-danger text-[11px] font-bold hover:bg-danger/10 transition-colors" data-pid="${p.pid}" data-name="${escapeHtml(p.name)}">
+          <span class="material-symbols-outlined text-[14px]">dangerous</span>Kill
+        </button>
+      </td>
+    </tr>
+  `;
+  }).join("");
+
+  tbody.querySelectorAll(".process-row").forEach(row => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".kill-row-btn")) return; // kill butonu ayrı akış açar
+      openDetailModal(Number(row.dataset.pid));
+    });
+  });
+  tbody.querySelectorAll(".kill-row-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openKillModal(Number(btn.dataset.pid), btn.dataset.name);
+    });
+  });
+}
+
+async function refreshProcesses() {
+  if (selectedClientId === null) return;
+  const data = await fetchJSON(`/processes/latest?client_id=${selectedClientId}`);
+  const result = data && data.result;
+
+  if (!result || !result.data.processes) {
+    latestProcesses = [];
+    processByPid = {};
+    renderProcessTable();
+    renderConnectionsTable([]);
+    refreshOpenModalIfAny();
+    return;
+  }
+
+  latestProcesses = [...result.data.processes].sort((a, b) => {
+    if (a.real_user !== b.real_user) return a.real_user ? -1 : 1; // gerçek kullanıcılar üstte
+    return a.name.localeCompare(b.name);
+  });
+  latestProcesses.forEach(p => { p._snapshot_at = result.at; });
+  processByPid = Object.fromEntries(latestProcesses.map(p => [p.pid, p]));
+
+  renderProcessTable();
+  renderConnectionsTable(latestProcesses);
+  refreshOpenModalIfAny();
+}
+
+document.getElementById("process-search").addEventListener("input", renderProcessTable);
+document.getElementById("process-type-filter").addEventListener("change", renderProcessTable);
+
+// psutil'den gelen ham TCP/UDP durum değerlerini okunur hale getirir.
+// "NONE" UDP soketleri için OS'ün kendisinin döndürdüğü gerçek değer —
+// UDP bağlantısız (connectionless) bir protokol olduğu için TCP'deki gibi
+// bir "durum"u yok; bu bir hata değil, olması gereken davranış. Ham veriyi
+// DEĞİŞTİRMİYORUZ, sadece daha okunur bir etiketle gösteriyoruz.
+const CONN_STATUS_LABEL = {
+  ESTABLISHED: { label: "ESTABLISHED", cls: "text-success" },
+  LISTEN: { label: "LISTEN", cls: "text-primary" },
+  NONE: { label: "UDP (bağlantısız)", cls: "text-on-surface-variant" },
+  TIME_WAIT: { label: "TIME_WAIT", cls: "text-warning" },
+  CLOSE_WAIT: { label: "CLOSE_WAIT", cls: "text-warning" },
+};
+function connStatusLabel(status) {
+  const s = CONN_STATUS_LABEL[status];
+  return s ? `<span class="${s.cls}">${s.label}</span>` : escapeHtml(status || "—");
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
+// ------------------------------------------------------------------
+// Canlı Ağ Bağlantı İzleme — image.png'deki referans tabloyla aynı
+// sütun yapısı (Bağlantı Parametresi / Yerel IP:Port / Uzak IP:Port /
+// Protokol / PID). Ayrı bir fetch yapmıyor, zaten çekilmiş process
+// listesindeki "connections" alanını düzleştirip gösteriyor.
+// ------------------------------------------------------------------
+function renderConnectionsTable(processes) {
+  const tbody = document.getElementById("connections-tbody");
+  const badge = document.getElementById("connections-count-badge");
+
+  const rows = [];
+  for (const p of processes) {
+    for (const c of (p.connections || [])) {
+      rows.push({ pid: p.pid, param: cmdlineText(p.cmdline) || p.name, laddr: c.laddr, raddr: c.raddr, protocol: c.protocol || "—", status: c.status });
+    }
+  }
+
+  badge.textContent = `${rows.length} aktif bağlantı`;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-lg text-on-surface-variant">Aktif ağ bağlantısı yok</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr class="zebra border-b border-outline-variant/20 hover:bg-surface-container-high/40 transition-colors">
+      <td class="py-xs px-md text-on-surface truncate max-w-[260px]" title="${escapeHtml(r.param)}">${escapeHtml(r.param)}</td>
+      <td class="py-xs px-md text-on-surface-variant">${escapeHtml(r.laddr || "—")}</td>
+      <td class="py-xs px-md text-on-surface-variant">${escapeHtml(r.raddr || "—")}</td>
+      <td class="py-xs px-md"><span class="px-2 py-[2px] rounded text-[10px] font-bold ${r.protocol === "TCP" ? "bg-primary/10 text-primary" : "bg-warning/10 text-warning"}">${r.protocol}</span></td>
+      <td class="py-xs px-md text-right text-on-surface-variant">${r.pid}</td>
+    </tr>
+  `).join("");
+}
+
+async function endpointsAutoRefresh() {
+  if (selectedClientId === null) return;
+  await queueCommand("get_process_list");
+  setTimeout(() => {
+    refreshProcesses();
+  }, RESULT_DELAY_MS);
+}
+
+function postJSON(path, body) {
+  return fetchJSON(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+}
+
+// ------------------------------------------------------------------
+// Process Detay Modalı — kim tetikledi, ne zaman, hangi parametrelerle,
+// ağ bağlantı detayları (requirement 1).
+// ------------------------------------------------------------------
+// Modal içeriğini doldurur — hem ilk açılışta (openDetailModal) hem de
+// modal açıkken 15sn'lik döngüde sessizce güncellerken (refreshOpenModalIfAny)
+// kullanılıyor, kod tekrarı olmasın diye.
+function populateDetailModal(p) {
+  document.getElementById("detail-title").textContent = `${p.name} — Process Detayı`;
+  document.getElementById("detail-pid").textContent = p.pid;
+  document.getElementById("detail-type").textContent = TYPE_LABELS[detectProcessType(p)].label;
+  document.getElementById("detail-user").textContent = `${p.user}${p.real_user ? " (gerçek kullanıcı)" : " (sistem hesabı)"}`;
+  document.getElementById("detail-time").textContent = p._snapshot_at ? new Date(p._snapshot_at).toLocaleString("tr-TR") : "—";
+  document.getElementById("detail-cmdline").innerHTML = renderCmdlineLines(p.cmdline);
+
+  const connBody = document.getElementById("detail-connections");
+  const conns = p.connections || [];
+  connBody.innerHTML = conns.length
+    ? conns.map(c => `
+      <tr class="border-b border-outline-variant/10">
+        <td class="py-xs px-sm whitespace-nowrap">${escapeHtml(c.laddr || "—")}</td>
+        <td class="py-xs px-sm whitespace-nowrap">${escapeHtml(c.raddr || "—")}</td>
+        <td class="py-xs px-sm whitespace-nowrap">${escapeHtml(c.protocol || "—")}</td>
+        <td class="py-xs px-sm whitespace-nowrap text-on-surface-variant">${connStatusLabel(c.status)}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="py-sm px-sm text-center text-on-surface-variant">Aktif bağlantı yok</td></tr>`;
+
+  const staleBanner = document.getElementById("detail-stale-banner");
+  if (staleBanner) staleBanner.classList.add("hidden");
+}
+
+function openDetailModal(pid) {
+  const p = processByPid[pid];
+  if (!p) return;
+  currentModalPid = pid;
+  populateDetailModal(p);
+  document.getElementById("detail-modal").classList.remove("hidden");
+  document.getElementById("detail-modal").classList.add("flex");
+}
+
+// Modal açıkken her 15sn'lik process döngüsünün sonunda çağrılır (bkz.
+// refreshProcesses). Amaç: kullanıcı bir process'in bağlantılarına bakıp
+// Kill kararı verirken elindeki verinin 15+ saniyelik donuk bir görüntü
+// olmaması — modal'ı kapatıp yeniden açmaya gerek kalmadan içeriği
+// güncelliyor. Process artık listede yoksa (öldürüldü/kapandı) kapatmıyoruz,
+// son bilinen veriyi gösterip üstte bir "artık çalışmıyor" bandı çıkarıyoruz.
+function refreshOpenModalIfAny() {
+  if (currentModalPid === null) return;
+  const modal = document.getElementById("detail-modal");
+  if (modal.classList.contains("hidden")) { currentModalPid = null; return; }
+
+  const p = processByPid[currentModalPid];
+  if (p) {
+    populateDetailModal(p);
+  } else {
+    const staleBanner = document.getElementById("detail-stale-banner");
+    if (staleBanner) staleBanner.classList.remove("hidden");
+  }
+}
+
+function closeDetailModal() {
+  document.getElementById("detail-modal").classList.add("hidden");
+  document.getElementById("detail-modal").classList.remove("flex");
+  currentModalPid = null;
+}
+document.getElementById("detail-close").addEventListener("click", closeDetailModal);
+document.getElementById("detail-modal").addEventListener("click", (e) => {
+  if (e.target.id === "detail-modal") closeDetailModal();
+});
+
+// ------------------------------------------------------------------
+// Kill Onay Modalı — admin yetkisi + onay akışı (requirement 4).
+// Her adım /kill/request ve /kill/{id}/approve çağrılarıyla sunucuda
+// RFC5424 satırı olarak loglanıyor (KILL-REQUEST, KILL-APPROVE/DENY,
+// KILL-DISPATCH, KILL-DELIVERED, KILL-RESULT); burada aynı adımlar
+// modal içinde kısa bir durum akışı olarak da gösteriliyor.
+// ------------------------------------------------------------------
+let killTargetPid = null;
+let killTargetName = null;
+
+function openKillModal(pid, name) {
+  killTargetPid = pid;
+  killTargetName = name;
+  document.getElementById("kill-target-pid").textContent = pid;
+  document.getElementById("kill-target-name").textContent = name;
+  document.getElementById("kill-reason").value = "";
+  document.getElementById("kill-passcode").value = "";
+  const log = document.getElementById("kill-status-log");
+  log.classList.add("hidden");
+  log.innerHTML = "";
+  document.getElementById("kill-modal").classList.remove("hidden");
+  document.getElementById("kill-modal").classList.add("flex");
+}
+
+function closeKillModal() {
+  document.getElementById("kill-modal").classList.add("hidden");
+  document.getElementById("kill-modal").classList.remove("flex");
+}
+document.getElementById("kill-close").addEventListener("click", closeKillModal);
+document.getElementById("kill-cancel").addEventListener("click", closeKillModal);
+document.getElementById("kill-modal").addEventListener("click", (e) => {
+  if (e.target.id === "kill-modal") closeKillModal();
+});
+
+function killLog(msg, cls) {
+  const log = document.getElementById("kill-status-log");
+  log.classList.remove("hidden");
+  log.classList.add("flex");
+  const line = document.createElement("div");
+  line.className = cls || "text-on-surface-variant";
+  line.textContent = msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById("kill-confirm").addEventListener("click", async () => {
+  const reason = document.getElementById("kill-reason").value;
+  const passcode = document.getElementById("kill-passcode").value;
+  const confirmBtn = document.getElementById("kill-confirm");
+
+  if (!passcode) {
+    killLog("Admin parolası girilmeden onaylanamaz.", "text-danger");
+    return;
+  }
+
+  confirmBtn.disabled = true;
+  killLog(`İstek açılıyor: pid=${killTargetPid} (${killTargetName})…`, "text-on-surface-variant");
+
+  const reqResp = await postJSON("/kill/request", {
+    pid: killTargetPid, process_name: killTargetName, reason, requested_by: "dashboard-admin",
+    client_id: selectedClientId,
+  });
+  if (!reqResp || !reqResp.request_id) {
+    killLog("İstek oluşturulamadı — sunucuya ulaşılamıyor.", "text-danger");
+    confirmBtn.disabled = false;
+    return;
+  }
+  killLog(`İstek oluşturuldu (request ${reqResp.request_id}). Yetkilendirme gönderiliyor…`, "text-primary");
+
+  const approveResp = await postJSON(`/kill/${reqResp.request_id}/approve`, {
+    passcode, approved_by: "dashboard-admin",
+  });
+
+  if (!approveResp || approveResp.status === "denied") {
+    killLog("Yetkilendirme reddedildi — parola hatalı.", "text-danger");
+    confirmBtn.disabled = false;
+    return;
+  }
+  if (approveResp.status === "not_found") {
+    killLog("İstek sunucuda bulunamadı.", "text-danger");
+    confirmBtn.disabled = false;
+    return;
+  }
+
+  killLog("Yetkilendirildi. Kill komutu kuyruğa eklendi, bir sonraki heartbeat'te agent'a gönderilecek.", "text-success");
+  killLog("Sonuç birkaç saniye içinde process listesinde görünecek.", "text-on-surface-variant");
+
+  setTimeout(() => {
+    closeKillModal();
+    confirmBtn.disabled = false;
+    refreshProcesses();
+    if (currentView === "logs") refreshKillAudit();
+  }, RESULT_DELAY_MS);
+});
+
+// ------------------------------------------------------------------
+// LOGS view — server/logs/ altındaki GERÇEK .log dosyaları, dosya
+// sekmeleriyle taranabilir. Sahte/uydurma bir tablo değil: /logs/files
+// dosya sistemini listeliyor, /logs/{name} de o dosyanın ham RFC5424
+// satırlarını dönüyor — burada gösterilen her satır diskte gerçekten var.
+// ------------------------------------------------------------------
+let activeLogFile = null;
+// Arama/filtre durumu — dosya değiştirilse de korunuyor (aynı saati farklı
+// log dosyalarında karşılaştırmak isteyebilir), 5sn'lik otomatik yenilemede
+// de (bkz. switchView -> setInterval) bu değerler tekrar kullanılıyor.
+let logSearchQuery = "";
+let logMsgidFilter = "";
+let logSearchDebounceTimer = null;
+
+const LOG_FILE_ICONS = {
+  "argus_server_events.log": "monitor_heart",
+  "kill_audit.log": "dangerous",
+};
+
+async function refreshLogFileList() {
+  const data = await fetchJSON("/logs/files");
+  const files = (data && data.files) || [];
+  const tabs = document.getElementById("log-file-tabs");
+
+  if (!files.length) {
+    tabs.innerHTML = `<div class="text-on-surface-variant text-sm">Henüz log dosyası yok.</div>`;
+    return;
+  }
+
+  if (!activeLogFile || !files.some(f => f.name === activeLogFile)) {
+    activeLogFile = files[0].name;
+  }
+
+  tabs.innerHTML = files.map(f => {
+    const active = f.name === activeLogFile;
+    const icon = LOG_FILE_ICONS[f.name] || "description";
+    return `
+      <button data-log="${escapeHtml(f.name)}" class="log-tab flex items-center gap-xs px-md py-sm rounded-lg font-data-mono text-data-mono text-sm border transition-colors
+        ${active ? "bg-primary text-on-primary border-primary" : "bg-surface-container-high text-on-surface-variant border-outline-variant/60 hover:text-on-surface hover:border-primary/50"}">
+        <span class="material-symbols-outlined text-[16px]">${icon}</span>${escapeHtml(f.name)}
+      </button>`;
+  }).join("");
+
+  tabs.querySelectorAll(".log-tab").forEach(btn => {
+    btn.addEventListener("click", () => selectLogFile(btn.dataset.log));
+  });
+
+  document.getElementById("active-log-name").textContent = activeLogFile;
+  const activeIcon = document.querySelector("#active-log-label .material-symbols-outlined");
+  if (activeIcon) activeIcon.textContent = LOG_FILE_ICONS[activeLogFile] || "description";
+}
+
+async function selectLogFile(name) {
+  activeLogFile = name;
+  logMsgidFilter = "";
+  await refreshLogFileList();
+  await refreshMsgidOptions(name);
+  await loadLogFile(name);
+}
+
+// MsgID dropdown'ını DOSYANIN TAMAMINDAN türetilmiş benzersiz değerlerle
+// doldurur (bkz. server.py /logs/{filename}/msgids) — o an ekranda arama/
+// filtre uygulanmış olsa bile liste eksilmesin diye ayrı bir çağrı.
+async function refreshMsgidOptions(name) {
+  const select = document.getElementById("logs-msgid-filter");
+  const data = await fetchJSON(`/logs/${encodeURIComponent(name)}/msgids`);
+  const msgids = (data && data.msgids) || [];
+  const prevValue = logMsgidFilter;
+
+  select.innerHTML = `<option value="">Tüm MsgID'ler</option>` + msgids.map(m =>
+    `<option value="${escapeHtml(m.msgid)}">${escapeHtml(m.msgid)} (${m.count})</option>`
+  ).join("");
+
+  // Önceki seçim bu dosyada da hâlâ varsa koru, yoksa "Tümü"ne dön.
+  if (prevValue && msgids.some(m => m.msgid === prevValue)) {
+    select.value = prevValue;
+    logMsgidFilter = prevValue;
+  } else {
+    select.value = "";
+    logMsgidFilter = "";
+  }
+}
+
+document.getElementById("logs-search").addEventListener("input", (e) => {
+  const value = e.target.value;
+  clearTimeout(logSearchDebounceTimer);
+  // 300ms debounce — her tuş vuruşunda değil, yazma durduğunda arat.
+  logSearchDebounceTimer = setTimeout(() => {
+    logSearchQuery = value;
+    if (activeLogFile) loadLogFile(activeLogFile);
+  }, 300);
+});
+
+document.getElementById("logs-msgid-filter").addEventListener("change", (e) => {
+  logMsgidFilter = e.target.value;
+  if (activeLogFile) loadLogFile(activeLogFile);
+});
+
+// RFC5424: <PRI>VERSION SP TIMESTAMP SP HOSTNAME SP APP-NAME SP PROCID SP
+// MSGID SP STRUCTURED-DATA SP MSG. STRUCTURED-DATA sıfır ya da daha fazla
+// "[id k=\"v\" ...]" bloğunun bitişik dizilimi.
+function parseRfc5424(line) {
+  const m = line.match(/^<(\d+)>(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+((?:\[[^\]]*\])*)\s*(.*)$/);
+  if (!m) return null;
+  const pri = parseInt(m[1], 10);
+  return {
+    severity: pri % 8, timestamp: m[3], hostname: m[4], appName: m[5],
+    procId: m[6], msgId: m[7], sd: m[8], message: m[9],
+  };
+}
+
+const SEVERITY_BADGE = {
+  3: { label: "ERROR", cls: "bg-danger/10 text-danger" },
+  4: { label: "WARN", cls: "bg-warning/10 text-warning" },
+  6: { label: "INFO", cls: "bg-primary/10 text-primary" },
+};
+function severityBadge(sev) {
+  const b = SEVERITY_BADGE[sev] || { label: "—", cls: "bg-surface-container-high text-on-surface-variant" };
+  return `<span class="px-2 py-[2px] rounded text-[10px] font-bold uppercase whitespace-nowrap ${b.cls}">${b.label}</span>`;
+}
+
+// key="value" çiftlerini terminal renklendirmesi gibi vurgular (anahtar =
+// muted mor, değer = mavi) — geri kalan metin (köşeli parantezler, özet
+// cümle) normal renginde kalır. Escaping raw metin üzerinde parça parça
+// yapılıyor, zaten escape edilmiş metne regex uygulanmıyor.
+function highlightKV(raw) {
+  const re = /([A-Za-z_][\w.]*)="([^"]*)"/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(raw)) !== null) {
+    out += escapeHtml(raw.slice(last, m.index));
+    out += `<span class="text-primary/80">${escapeHtml(m[1])}</span><span class="text-on-surface-variant">=</span><span class="text-[#82aaff]">"${escapeHtml(m[2])}"</span>`;
+    last = re.lastIndex;
+  }
+  out += escapeHtml(raw.slice(last));
+  return out;
+}
+
+const LOG_TABLE_GRID = "grid-cols-[190px_150px_70px_1fr]";
+
+async function loadLogFile(name, opts = {}) {
+  const body = document.getElementById("logs-body");
+  if (!opts.silent) {
+    body.innerHTML = `<div class="text-center text-on-surface-variant py-lg">Yükleniyor…</div>`;
+  }
+
+  const params = new URLSearchParams({ limit: "300" });
+  if (logSearchQuery) params.set("q", logSearchQuery);
+  if (logMsgidFilter) params.set("msgid", logMsgidFilter);
+
+  const data = await fetchJSON(`/logs/${encodeURIComponent(name)}?${params.toString()}`);
+  const lines = (data && data.lines) || [];
+  const total = (data && data.total_lines) || 0;
+  const matched = (data && data.matched_lines);
+  const filtered = data && data.filtered;
+
+  document.getElementById("logs-count").textContent = filtered
+    ? `${matched} eşleşme (en fazla 300 gösterilir) · dosyada toplam ${total} satır`
+    : `${lines.length} satır gösteriliyor (en yeni üstte) · dosyada toplam ${total} satır`;
+
+  if (!lines.length) {
+    body.innerHTML = filtered
+      ? `<div class="text-center text-on-surface-variant py-lg">Aramayla eşleşen satır yok.</div>`
+      : `<div class="text-center text-on-surface-variant py-lg">Bu dosyada henüz kayıt yok.</div>`;
+    return;
+  }
+
+  const rows = lines.map(l => {
+    const p = parseRfc5424(l);
+    if (!p) {
+      // Beklenmedik formatta bir satır gelirse ham haliyle göster, veri gizlenmesin.
+      return `<div class="grid ${LOG_TABLE_GRID} gap-sm items-start px-md py-1 border-b border-outline-variant/10 hover:bg-white/5">
+        <div class="text-on-surface-variant col-span-4 break-all">${escapeHtml(l)}</div>
+      </div>`;
+    }
+    return `
+      <div class="grid ${LOG_TABLE_GRID} gap-sm items-start px-md py-1 border-b border-outline-variant/10 hover:bg-white/5">
+        <div class="text-on-surface-variant">${escapeHtml(p.timestamp)}</div>
+        <div class="text-warning truncate" title="${escapeHtml(p.msgId)}">${escapeHtml(p.msgId)}</div>
+        <div>${severityBadge(p.severity)}</div>
+        <div class="text-[#a9b7c6] break-all">${highlightKV(`${p.sd} ${p.message}`)}</div>
+      </div>`;
+  }).join("");
+
+  // Periyodik otomatik yenilemede (5sn'de bir) scroll pozisyonunu koru —
+  // innerHTML tamamen değiştiği için tarayıcı normalde scroll'u sıfırlıyor;
+  // kullanıcı eski satırlara bakarken sürekli sayfanın başına fırlatılmasın.
+  // Not: bu piksel-bazlı bir koruma — üstte yeni satır(lar) eklendiğinde
+  // görünen satırlar birkaç piksel kayabilir ama artık en başa atmıyor.
+  const prevScroll = body.scrollTop;
+
+  body.innerHTML = `
+    <div lang="en" class="grid ${LOG_TABLE_GRID} gap-sm items-center px-md py-sm border-b border-primary/40 sticky top-0 bg-surface-container-highest font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider z-10">
+      <div>Timestamp (ISO 8601)</div>
+      <div>MsgID</div>
+      <div>Level</div>
+      <div>Message</div>
+    </div>
+    ${rows}`;
+  body.scrollTop = prevScroll;
+}
+
+// Kill onay/işlem geçmişi — RFC5424 severity mantığıyla renklendirilmiş
+// (INFO: primary/success tonu, WARNING: amber, ERROR/DENIED: danger),
+// requirement 5'teki "gerekli renklendirme ve sütunlar" burada uygulanıyor.
+const KILL_STATUS_STYLE = {
+  pending_approval: { label: "BEKLİYOR", cls: "bg-warning/10 text-warning" },
+  approved:         { label: "ONAYLANDI", cls: "bg-primary/10 text-primary" },
+  denied:           { label: "REDDEDİLDİ", cls: "bg-danger/10 text-danger" },
+  dispatched:       { label: "GÖNDERİLDİ", cls: "bg-primary/10 text-primary" },
+  delivered:        { label: "AGENT'A ULAŞTI", cls: "bg-primary/10 text-primary" },
+  done:             { label: "TAMAMLANDI", cls: "bg-success/10 text-success" },
+  error:            { label: "HATA", cls: "bg-danger/10 text-danger" },
+};
+
+async function refreshKillAudit() {
+  const data = await fetchJSON("/kill/requests");
+  const rows = (data && data.requests) || [];
+  const body = document.getElementById("kill-audit-body");
+  document.getElementById("kill-audit-count").textContent = `${rows.length} kayıt`;
+
+  if (!rows.length) {
+    body.innerHTML = `<div class="text-center text-on-surface-variant py-lg">Henüz kill isteği yok.</div>`;
+    return;
+  }
+
+  const prevScroll = body.scrollTop;
+  body.innerHTML = rows.map((r, i) => {
+    const st = KILL_STATUS_STYLE[r.status] || { label: r.status, cls: "bg-surface-container-high text-on-surface-variant" };
+    const detail = r.status === "denied"
+      ? `${escapeHtml(r.requested_by)} tarafından reddedildi — geçersiz parola`
+      : `${escapeHtml(r.process_name || "?")}${r.endpoint_label ? " @ " + escapeHtml(r.endpoint_label) : ""} · istek: ${escapeHtml(r.requested_by)}${r.approved_by ? " · onay: " + escapeHtml(r.approved_by) : ""}${r.reason ? " · gerekçe: " + escapeHtml(r.reason) : ""}${r.result_detail ? " · " + escapeHtml(r.result_detail) : ""}`;
+    return `
+      <div class="grid grid-cols-[110px_170px_90px_100px_1fr] items-center px-md py-1 border-b border-outline-variant/10 hover:bg-white/5 ${i % 2 === 0 ? "" : "bg-white/[0.02]"}">
+        <div class="text-on-surface-variant truncate">${escapeHtml(r.request_id)}</div>
+        <div class="text-on-surface-variant">${new Date(r.requested_at).toLocaleString("tr-TR")}</div>
+        <div class="text-on-surface">${r.pid}</div>
+        <div><span class="${st.cls} px-xs rounded text-[10px] uppercase font-bold">${st.label}</span></div>
+        <div class="text-[#a9b7c6] truncate">${detail}</div>
+      </div>`;
+  }).join("");
+  body.scrollTop = prevScroll;
+}
+
+// ------------------------------------------------------------------
+// SETTINGS view — sunucu config'i
+// ------------------------------------------------------------------
+async function refreshSettings() {
+  const data = await fetchJSON("/config");
+  const cfg = data && data.config;
+  if (!cfg) return;
+  document.getElementById("cfg-host").textContent = cfg.host;
+  document.getElementById("cfg-port").textContent = cfg.port;
+  document.getElementById("cfg-db").textContent = cfg.db_path;
+  document.getElementById("cfg-retention").textContent = `${cfg.heartbeat_retention_days} gün`;
+  document.getElementById("cfg-cleanup").textContent = cfg.cleanup_interval_hours === 1 ? "saatte bir" : `${cfg.cleanup_interval_hours} saatte bir`;
+}
+
+// ------------------------------------------------------------------
+// Navigasyon / görünüm değiştirme
+// ------------------------------------------------------------------
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll(".view").forEach(el => el.classList.toggle("active", el.id === `view-${view}`));
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.toggle("active", el.dataset.view === view));
+
+  const titles = { endpoints: "Endpoints", logs: "Logs", settings: "Settings" };
+  document.getElementById("page-title").textContent = titles[view];
+
+  clearInterval(refreshTimer);
+  clearInterval(endpointsSubTimer);
+  clearInterval(window._processPollTimer);
+  if (view === "endpoints") {
+    // Sekmeye her dönüşte cihaz listesinden başla — "hangi endpoint'e
+    // tıklandıysa onun verisi görünsün" mantığı bunu gerektiriyor; önceki
+    // seçim korunmuyor, kullanıcı her seferinde ilgilendiği cihaza tekrar
+    // tıklıyor (kartların kendisi zaten anlık online/offline gösteriyor).
+    showEndpointsSubview("list");
+  } else if (view === "logs") {
+    refreshLogFileList().then(() => { if (activeLogFile) { refreshMsgidOptions(activeLogFile); loadLogFile(activeLogFile); } });
+    refreshKillAudit();
+    refreshTimer = setInterval(() => {
+      refreshLogFileList().then(() => { if (activeLogFile) loadLogFile(activeLogFile, { silent: true }); });
+      refreshKillAudit();
+    }, 5000);
+  } else if (view === "settings") {
+    refreshSettings();
+  }
+}
+
+document.querySelectorAll(".nav-item").forEach(el => {
+  el.addEventListener("click", () => switchView(el.dataset.view));
+});
+
+// Kenar çubuğunu daralt/genişlet (tercih localStorage'da tutulur)
+const sidebar = document.getElementById("sidebar");
+const mainArea = document.getElementById("main-area");
+function applySidebarState(collapsed) {
+  sidebar.classList.toggle("collapsed", collapsed);
+  mainArea.classList.toggle("collapsed", collapsed);
+}
+document.getElementById("sidebar-toggle").addEventListener("click", () => {
+  const collapsed = !sidebar.classList.contains("collapsed");
+  applySidebarState(collapsed);
+  localStorage.setItem("argus_sidebar_collapsed", collapsed ? "1" : "0");
+});
+applySidebarState(localStorage.getItem("argus_sidebar_collapsed") === "1");
+
+// ------------------------------------------------------------------
+// İlk yükleme: switchView("endpoints") -> showEndpointsSubview("list")
+// zaten /clients'ı çekip cihaz kartlarını çiziyor ve 3sn'lik polling'i
+// başlatıyor (bkz. yukarısı) — burada ayrıca state/process çekmeye
+// gerek yok, henüz seçili bir client_id de yok.
+// ------------------------------------------------------------------
+switchView("endpoints");
+</script>
+</body>
+</html>
